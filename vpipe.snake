@@ -1150,6 +1150,7 @@ elif config.general["aligner"] == "bowtie":
             scratch = '1250',
             mem = config.ref_bowtie_index['mem'],
             time = config.ref_bowtie_index['time'],
+            INDEX_BASE = os.path.splitext(reference_file)[0],
             BOWTIE = config.applications['bowtie_idx']
         log:
             outfile = "references/bowtie_index.out.log",
