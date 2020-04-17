@@ -1,4 +1,6 @@
-samples:
+workdir: pipeline_run
+
+samples_pe:
     - SRR10903401
 
 reference: references/NC_045512.2.fasta

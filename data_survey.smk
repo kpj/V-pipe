@@ -1,73 +1,66 @@
 configfile: 'data_survey.config.yaml'
+workdir: config['workdir']
+
+
+def len_cutoff(wildcards, trim_percent_cutoff=.8):
+    """Compute minimal length based on average read length."""
+    import numpy as np
+    from Bio import SeqIO
+
+    fname = f'data/{wildcards.accession}_1.fastq'
+    read_len = np.mean(
+        [len(r.seq) for r in SeqIO.parse(fname, 'fastq')]
+    ).astype(int)
+
+    len_cutoff = int(trim_percent_cutoff * read_len)
+    return len_cutoff
 
 
 rule all:
     input:
-        expand('samples/{accession}/pseudo_alignment/{accession}/', accession=config['samples'])
+        'results/results.csv'
 
 
-rule download:
+rule get_fastq_pe:
     output:
-        temp('samples/{accession}/19700101/raw_data/info.tsv')
-    log:
-        'logs/download.{accession}.log'
-    shell:
-        """
-        # TODO: make all of this more robust
-        outdir="$(dirname {output[0]})"
-
-        # download FastQ
-        fasterq-dump \
-            --outdir "$outdir" \
-            {wildcards.accession} \
-            &> "{log}"
-
-        # make V-pipe recognize output files
-        rename 's/_1/_R1/' "$outdir"/*.fastq
-        rename 's/_2/_R2/' "$outdir"/*.fastq
-
-        # get fastq filename
-        fname=$(ls "$outdir"/*.fastq | head -1)
-        echo "Selected filename: $fname" &>> "{log}"
-
-        # get read length
-        read_length=$(bioawk -c fastx '{{ bases += length($seq); count++ }} END{{print int(bases/count)}}' $fname)
-        echo "Computed read length: $read_length" &>> "{log}"
-
-        # store in info file
-        echo -e "{wildcards.accession}\t19700101\t$read_length" > {output}
-        """
-
-
-rule create_samples_tsv:
-    input:
-        expand(
-            'samples/{accession}/19700101/raw_data/info.tsv',
-            accession=config['samples']
-        )
-    output:
-        'samples.tsv'
-    shell:
-        """
-        cat {input} > {output}
-        """
+        'data/{accession}_1.fastq',
+        'data/{accession}_2.fastq'
+    wrapper:
+        '0.51.2/bio/sra-tools/fasterq-dump'
 
 
 rule vpipe_trim:
     input:
-        'samples.tsv'
+        fname1 = 'data/{accession}_1.fastq',
+        fname2 = 'data/{accession}_2.fastq'
     output:
-        'samples/{accession}/19700101/preprocessed_data/R1.fastq.gz',
-        'samples/{accession}/19700101/preprocessed_data/R2.fastq.gz'
+        'trimmed/{accession}_1.fastq',
+        'trimmed/{accession}_2.fastq'
+    params:
+        extra = '-ns_max_n 4 -min_qual_mean 30 -trim_qual_left 30 -trim_qual_right 30 -trim_qual_window 10',
+        len_cutoff = len_cutoff
+    log:
+        outfile = 'logs/prinseq.{accession}.out.log',
+        errfile = 'logs/prinseq.{accession}.err.log'
     shell:
         """
-        snakemake -s vpipe.snake --cores 1 alltrimmed
+        echo "The length cutoff is: {params.len_cutoff}" > {log.outfile}
+
+        prinseq-lite.pl \
+            -fastq {input.fname1} \
+            -fastq2 {input.fname2} \
+            {params.extra} \
+            -out_format 3 \
+            -out_good trimmed/{wildcards.accession} \
+            -out_bad null \
+            -min_len {params.len_cutoff} \
+            -log {log.outfile} 2> >(tee {log.errfile} >&2)
         """
 
 
 rule kallisto_index:
     input:
-        fasta = config['reference']
+        fasta = srcdir(config['reference'])
     output:
         index = 'references/reference.idx'
     log:
@@ -79,16 +72,35 @@ rule kallisto_index:
 rule kallisto_quant:
     input:
         fastq = [
-            'samples/{accession}/19700101/preprocessed_data/R1.fastq.gz',
-            'samples/{accession}/19700101/preprocessed_data/R2.fastq.gz'
+            'trimmed/{accession}_1.fastq',
+            'trimmed/{accession}_2.fastq'
         ],
         index = 'references/reference.idx'
     output:
-        directory('samples/{accession}/pseudo_alignment/{accession}/')
+        directory('pseudo_alignment/{accession}/')
     params:
         extra = ''
     log:
         'logs/kallisto_quant_{accession}.log'
-    threads: 1
     wrapper:
         '0.51.2/bio/kallisto/quant'
+
+
+rule aggregate_results:
+    input:
+        dname_list = expand('pseudo_alignment/{accession}/', accession=config['samples_pe'])
+    output:
+        fname = 'results/results.csv'
+    run:
+        import os
+        import pandas as pd
+
+        df_list = []
+        for dname in input.dname_list:
+            fname = os.path.join(dname, 'abundance.tsv')
+            tmp = pd.read_csv(fname, sep='\t')
+            tmp['accession'] = dname.split('/')[1]
+            df_list.append(tmp)
+        df = pd.concat(df_list)
+
+        df.to_csv(output.fname, index=False)
