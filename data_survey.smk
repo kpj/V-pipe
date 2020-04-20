@@ -27,6 +27,9 @@ rule get_fastq_pe:
     output:
         'data/{accession}_1.fastq',
         'data/{accession}_2.fastq'
+    resources:
+        mem_mb = 5_000
+    threads: 6
     wrapper:
         '0.51.2/bio/sra-tools/fasterq-dump'
 
