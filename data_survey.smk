@@ -113,6 +113,9 @@ rule bwa_mem:
         index = 'references/reference',
         sort = 'samtools',
         sort_order = 'coordinate',
+    resources:
+        mem_mb = 16_000
+    threads: 8
     wrapper:
         '0.51.2/bio/bwa/mem'
 
