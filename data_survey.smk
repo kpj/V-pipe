@@ -42,6 +42,8 @@ rule vpipe_trim:
     log:
         outfile = 'logs/prinseq.{accession}.out.log',
         errfile = 'logs/prinseq.{accession}.err.log'
+    conda:
+        'envs/preprocessing.yaml'
     shell:
         """
         echo "The length cutoff is: {params.len_cutoff}" > {log.outfile}
