@@ -9,7 +9,13 @@ def len_cutoff(wildcards, trim_percent_cutoff=.8):
     import numpy as np
     from Bio import SeqIO
 
-    fname = f'data/{wildcards.accession}_1.fastq'
+    if wildcards.accession in config['samples_se']:
+        fname = f'data/SE/{wildcards.accession}.fastq'
+    elif wildcards.accession in config['samples_pe']:
+        fname = f'data/PE/{wildcards.accession}_1.fastq'
+    else:
+        raise RuntimeError(f'Invalid accession: {wildcards.accession}')
+
     read_len = np.mean(
         [len(r.seq) for r in SeqIO.parse(fname, 'fastq')]
     ).astype(int)
@@ -18,15 +24,39 @@ def len_cutoff(wildcards, trim_percent_cutoff=.8):
     return len_cutoff
 
 
+def gather_trimmed_input_files(wildcards):
+    if wildcards.accession in config['samples_se']:
+        return [
+            f'trimmed/SE/{wildcards.accession}.fastq'
+        ]
+    elif wildcards.accession in config['samples_pe']:
+        return [
+            f'trimmed/PE/{wildcards.accession}_1.fastq',
+            f'trimmed/PE/{wildcards.accession}_2.fastq'
+        ]
+    else:
+        raise RuntimeError(f'Invalid accession: {wildcards.accession}')
+
+
 rule all:
     input:
         'plots/'
 
 
+rule get_fastq_se:
+    output:
+        'data/SE/{accession}.fastq'
+    resources:
+        mem_mb = 5_000
+    threads: 6
+    wrapper:
+        '0.51.3/bio/sra-tools/fasterq-dump'
+
+
 rule get_fastq_pe:
     output:
-        'data/{accession}_1.fastq',
-        'data/{accession}_2.fastq'
+        'data/PE/{accession}_1.fastq',
+        'data/PE/{accession}_2.fastq'
     resources:
         mem_mb = 5_000
     threads: 6
@@ -34,13 +64,41 @@ rule get_fastq_pe:
         '0.51.2/bio/sra-tools/fasterq-dump'
 
 
-rule vpipe_trim:
+rule vpipe_trim_se:
     input:
-        fname1 = 'data/{accession}_1.fastq',
-        fname2 = 'data/{accession}_2.fastq'
+        fname = 'data/SE/{accession}.fastq'
     output:
-        'trimmed/{accession}_1.fastq',
-        'trimmed/{accession}_2.fastq'
+        'trimmed/SE/{accession}.fastq',
+    params:
+        extra = '-ns_max_n 4 -min_qual_mean 30 -trim_qual_left 30 -trim_qual_right 30 -trim_qual_window 10',
+        len_cutoff = len_cutoff
+    log:
+        outfile = 'logs/prinseq.{accession}.out.log',
+        errfile = 'logs/prinseq.{accession}.err.log'
+    conda:
+        'envs/preprocessing.yaml'
+    shell:
+        """
+        echo "The length cutoff is: {params.len_cutoff}" > {log.outfile}
+
+        prinseq-lite.pl \
+            -fastq {input.fname} \
+            {params.extra} \
+            -out_format 3 \
+            -out_good trimmed/SE/{wildcards.accession} \
+            -out_bad null \
+            -min_len {params.len_cutoff} \
+            -log {log.outfile} 2> >(tee {log.errfile} >&2)
+        """
+
+
+rule vpipe_trim_pe:
+    input:
+        fname1 = 'data/PE/{accession}_1.fastq',
+        fname2 = 'data/PE/{accession}_2.fastq'
+    output:
+        'trimmed/PE/{accession}_1.fastq',
+        'trimmed/PE/{accession}_2.fastq'
     params:
         extra = '-ns_max_n 4 -min_qual_mean 30 -trim_qual_left 30 -trim_qual_right 30 -trim_qual_window 10',
         len_cutoff = len_cutoff
@@ -58,7 +116,7 @@ rule vpipe_trim:
             -fastq2 {input.fname2} \
             {params.extra} \
             -out_format 3 \
-            -out_good trimmed/{wildcards.accession} \
+            -out_good trimmed/PE/{wildcards.accession} \
             -out_bad null \
             -min_len {params.len_cutoff} \
             -log {log.outfile} 2> >(tee {log.errfile} >&2)
@@ -108,7 +166,7 @@ rule bwa_index:
 #         '0.51.2/bio/kallisto/quant'
 rule bwa_mem:
     input:
-        reads = ['trimmed/{accession}_1.fastq', 'trimmed/{accession}_2.fastq'],
+        reads = gather_trimmed_input_files,
         index = 'references/reference.amb'
     output:
         'alignment/{accession}.bam'
@@ -180,7 +238,8 @@ rule compute_coverage:
 rule aggregate_results:
     input:
         fname_list = expand(
-            'coverage/coverage.{accession}.csv', accession=config['samples_pe'])
+            'coverage/coverage.{accession}.csv',
+            accession=config['samples_se'] + config['samples_pe'])
     output:
         fname = 'results/results.csv'
     run:
