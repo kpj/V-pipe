@@ -123,15 +123,6 @@ rule vpipe_trim_pe:
         """
 
 
-# rule kallisto_index:
-#     input:
-#         fasta = srcdir(config['reference'])
-#     output:
-#         index = 'references/reference.idx'
-#     log:
-#         'logs/kallisto_index.log'
-#     wrapper:
-#         '0.51.2/bio/kallisto/index'
 rule bwa_index:
     input:
         srcdir(config['reference'])
@@ -149,21 +140,6 @@ rule bwa_index:
         '0.51.2/bio/bwa/index'
 
 
-# rule kallisto_quant:
-#     input:
-#         fastq = [
-#             'trimmed/{accession}_1.fastq',
-#             'trimmed/{accession}_2.fastq'
-#         ],
-#         index = 'references/reference.idx'
-#     output:
-#         directory('pseudo_alignment/{accession}/')
-#     params:
-#         extra = ''
-#     log:
-#         'logs/kallisto_quant_{accession}.log'
-#     wrapper:
-#         '0.51.2/bio/kallisto/quant'
 rule bwa_mem:
     input:
         reads = gather_trimmed_input_files,
@@ -217,24 +193,6 @@ rule compute_coverage:
         }).to_csv(output.fname, index=False)
 
 
-# rule aggregate_results:
-#     input:
-#         dname_list = expand('pseudo_alignment/{accession}/', accession=config['samples_pe'])
-#     output:
-#         fname = 'results/results.csv'
-#     run:
-#         import os
-#         import pandas as pd
-#
-#         df_list = []
-#         for dname in input.dname_list:
-#             fname = os.path.join(dname, 'abundance.tsv')
-#             tmp = pd.read_csv(fname, sep='\t')
-#             tmp['accession'] = dname.split('/')[1]
-#             df_list.append(tmp)
-#         df = pd.concat(df_list)
-#
-#         df.to_csv(output.fname, index=False)
 rule aggregate_results:
     input:
         fname_list = expand(
