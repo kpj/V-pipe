@@ -188,8 +188,7 @@ rule compute_coverage:
         coverage = np.sum(bam.count_coverage(ref), axis=0)
 
         pd.DataFrame({
-            'accession': [wildcards.accession],
-            'coverage': [np.mean(coverage)]
+            wildcards.accession: coverage
         }).to_csv(output.fname, index=False)
 
 
@@ -199,7 +198,8 @@ rule aggregate_results:
             'coverage/coverage.{accession}.csv',
             accession=config['samples_se'] + config['samples_pe'])
     output:
-        fname = 'results/results.csv'
+        fname = 'results/coverage.csv',
+        fname_stats = 'results/statistics.csv'
     run:
         import pandas as pd
 
@@ -207,14 +207,15 @@ rule aggregate_results:
         for fname in input.fname_list:
             tmp = pd.read_csv(fname)
             df_list.append(tmp)
-        df = pd.concat(df_list)
+        df = pd.concat(df_list, axis=1)
 
         df.to_csv(output.fname, index=False)
+        df.describe().to_csv(output.fname_stats, index=True)
 
 
 rule plot_results:
     input:
-        fname = 'results/results.csv'
+        fname = 'results/coverage.csv'
     output:
         dname = directory('plots/')
     run:
@@ -235,11 +236,22 @@ rule plot_results:
 
         # plot data
         plt.figure(figsize=(8, 6))
-
-        sns.distplot(df['coverage'], kde=False)
-
-        plt.xlabel('Coverage per Accession')
+        sns.distplot(df.median(axis=0), kde=False)
+        plt.xlabel('Median Coverage per Accession')
         plt.ylabel('Count')
-
         plt.tight_layout()
-        plt.savefig(dname / 'coverage_histogram.pdf')
+        plt.savefig(dname / 'coverage_histogram_median.pdf')
+
+        plt.figure(figsize=(8, 6))
+        sns.distplot(df.quantile(q=.25, axis=0), kde=False)
+        plt.xlabel('Lower Quartile Coverage per Accession')
+        plt.ylabel('Count')
+        plt.tight_layout()
+        plt.savefig(dname / 'coverage_histogram_quartile.pdf')
+
+        plt.figure(figsize=(8, 6))
+        sns.boxplot(x='variable', y='value', data=pd.melt(df))
+        plt.xlabel('SRA Accession')
+        plt.ylabel('Per base read count')
+        plt.tight_layout()
+        plt.savefig(dname / 'coverage_boxplots.pdf')
