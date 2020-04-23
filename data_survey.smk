@@ -199,7 +199,10 @@ rule aggregate_results:
             accession=config['samples_se'] + config['samples_pe'])
     output:
         fname = 'results/coverage.csv',
-        fname_stats = 'results/statistics.csv'
+        fname_stats = 'results/statistics.csv',
+        fname_lowquar = 'results/coverage_lowerquartile.csv',
+        fname_median = 'results/coverage_median.csv',
+        fname_upperquar = 'results/coverage_upperquartile.csv'
     run:
         import pandas as pd
 
@@ -209,13 +212,30 @@ rule aggregate_results:
             df_list.append(tmp)
         df = pd.concat(df_list, axis=1)
 
+        # save data and basic statistics
         df.to_csv(output.fname, index=False)
-        df.describe().to_csv(output.fname_stats, index=True)
+        df.describe().to_csv(output.fname_stats)
+
+        # save useful metrics
+        (pd.melt(df).groupby('variable')
+                    .quantile(q=.25)
+                    .sort_values('value')
+                    .to_csv(output.fname_lowquar))
+        (pd.melt(df).groupby('variable')
+                    .quantile(q=.5)
+                    .sort_values('value')
+                    .to_csv(output.fname_median))
+        (pd.melt(df).groupby('variable')
+                    .quantile(q=.75)
+                    .sort_values('value')
+                    .to_csv(output.fname_upperquar))
 
 
 rule plot_results:
     input:
-        fname = 'results/coverage.csv'
+        fname_lowquar = 'results/coverage_lowerquartile.csv',
+        fname_median = 'results/coverage_median.csv',
+        fname_upperquar = 'results/coverage_upperquartile.csv'
     output:
         dname = directory('plots/')
     run:
@@ -232,26 +252,40 @@ rule plot_results:
 
         # read data
         dname = Path(output.dname)
-        df = pd.read_csv(input.fname)
+
+        df_lq = pd.read_csv(input.fname_lowquar, index_col=0)
+        df_mq = pd.read_csv(input.fname_median, index_col=0)
+        df_uq = pd.read_csv(input.fname_upperquar, index_col=0)
 
         # plot data
-        plt.figure(figsize=(8, 6))
-        sns.distplot(df.median(axis=0), kde=False)
-        plt.xlabel('Median Coverage per Accession')
-        plt.ylabel('Count')
-        plt.tight_layout()
-        plt.savefig(dname / 'coverage_histogram_median.pdf')
+        accession_order = df_mq.sort_values('value').index.tolist()
 
         plt.figure(figsize=(8, 6))
-        sns.distplot(df.quantile(q=.25, axis=0), kde=False)
-        plt.xlabel('Lower Quartile Coverage per Accession')
-        plt.ylabel('Count')
-        plt.tight_layout()
-        plt.savefig(dname / 'coverage_histogram_quartile.pdf')
 
-        plt.figure(figsize=(8, 6))
-        sns.boxplot(x='variable', y='value', data=pd.melt(df))
+        plt.plot(
+            accession_order,
+            df_mq.loc[accession_order, 'value'],
+            label='median')
+        plt.plot(
+            accession_order,
+            df_lq.loc[accession_order, 'value'],
+            alpha=.5,
+            label='lower quartile')
+        plt.plot(
+            accession_order,
+            df_uq.loc[accession_order, 'value'],
+            alpha=.5,
+            label='upper quartile')
+
         plt.xlabel('SRA Accession')
         plt.ylabel('Per base read count')
+        plt.yscale('log')
+        plt.tick_params(
+            axis='x',
+            which='both',
+            labelbottom=False)
+
+        plt.legend(loc='best')
+
         plt.tight_layout()
-        plt.savefig(dname / 'coverage_boxplots.pdf')
+        plt.savefig(dname / 'coverage.pdf')
