@@ -1,5 +1,11 @@
 workdir: pipeline_run
 
+thresholds:
+    median_minium: 100
+    quartile_range: [100, 10000]
+
+reference: references/NC_045512.2.fasta
+
 samples_pe:
     - SRR11177792
     - SRR11528306
@@ -484,5 +490,3 @@ samples_se:
     - SRR11410536
     - SRR11410538
     - SRR11410540
-
-reference: references/NC_045512.2.fasta

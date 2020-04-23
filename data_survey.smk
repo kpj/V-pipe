@@ -40,7 +40,8 @@ def gather_trimmed_input_files(wildcards):
 
 rule all:
     input:
-        'plots/'
+        'plots/',
+        'results/selected_samples.csv'
 
 
 rule get_fastq_se:
@@ -277,6 +278,16 @@ rule plot_results:
             alpha=.5,
             label='upper quartile')
 
+        plt.axhline(
+            config['thresholds']['median_minium'],
+            color='black', ls='dashed', alpha=0.2)
+        plt.axhline(
+            config['thresholds']['quartile_range'][0],
+            color='black', ls='dashed', alpha=0.2)
+        plt.axhline(
+            config['thresholds']['quartile_range'][1],
+            color='black', ls='dashed', alpha=0.2)
+
         plt.xlabel('SRA Accession')
         plt.ylabel('Per base read count')
         plt.yscale('log')
@@ -289,3 +300,37 @@ rule plot_results:
 
         plt.tight_layout()
         plt.savefig(dname / 'coverage.pdf')
+
+
+rule select_samples:
+    input:
+        fname_lowquar = 'results/coverage_lowerquartile.csv',
+        fname_median = 'results/coverage_median.csv',
+        fname_upperquar = 'results/coverage_upperquartile.csv'
+    output:
+        fname = 'results/selected_samples.csv'
+    run:
+        import pandas as pd
+
+        # read data
+        df_lq = pd.read_csv(input.fname_lowquar, index_col=0)
+        df_mq = pd.read_csv(input.fname_median, index_col=0)
+        df_uq = pd.read_csv(input.fname_upperquar, index_col=0)
+
+        # apply thresholds
+        selection_mq = set(df_mq[
+            df_mq['value'] >= config['thresholds']['median_minium']
+        ].index)
+        selection_lq = set(df_lq[
+            df_lq['value'] >= config['thresholds']['quartile_range'][0]
+        ].index)
+        selection_uq = set(df_uq[
+            df_uq['value'] <= config['thresholds']['quartile_range'][1]
+        ].index)
+
+        selection = selection_mq & selection_lq & selection_uq
+
+        # save results
+        with open(output.fname, 'w') as fd:
+            fd.write('accession\n')
+            fd.write('\n'.join(selection))
