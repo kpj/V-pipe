@@ -21,20 +21,6 @@ def len_cutoff(wildcards, trim_percent_cutoff=.8):
     return len_cutoff
 
 
-def gather_trimmed_input_files(wildcards):
-    if wildcards.accession in config['samples_se']:
-        return [
-            f'trimmed/SE/{wildcards.accession}.fastq'
-        ]
-    elif wildcards.accession in config['samples_pe']:
-        return [
-            f'trimmed/PE/{wildcards.accession}_1.fastq',
-            f'trimmed/PE/{wildcards.accession}_2.fastq'
-        ]
-    else:
-        raise RuntimeError(f'Invalid accession: {wildcards.accession}')
-
-
 rule all:
     input:
         'plots/',
