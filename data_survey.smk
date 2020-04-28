@@ -6,15 +6,12 @@ localrules: all, aggregate_results, plot_results
 
 def len_cutoff(wildcards, trim_percent_cutoff=.8):
     """Compute minimal length based on average read length."""
+    import glob
+
     import numpy as np
     from Bio import SeqIO
 
-    if wildcards.accession in config['samples_se']:
-        fname = f'data/SE/{wildcards.accession}.fastq'
-    elif wildcards.accession in config['samples_pe']:
-        fname = f'data/PE/{wildcards.accession}_1.fastq'
-    else:
-        raise RuntimeError(f'Invalid accession: {wildcards.accession}')
+    fname = sorted(glob.glob(f'data/{wildcards.accession}*.fastq'))[0]
 
     read_len = np.mean(
         [len(r.seq) for r in SeqIO.parse(fname, 'fastq')]
@@ -44,32 +41,31 @@ rule all:
         'results/selected_samples.csv'
 
 
-rule get_fastq_se:
+rule download_fastq:
     output:
-        'data/SE/{accession}.fastq'
+        fname_marker = touch('data/{accession}.marker')
+    log:
+        outfile = 'logs/fasterq-dump.{accession}.out.log',
+        errfile = 'logs/fasterq-dump.{accession}.err.log'
     resources:
         mem_mb = 5_000
     threads: 6
-    wrapper:
-        '0.51.3/bio/sra-tools/fasterq-dump'
+    run:
+        import os
+
+        outdir = os.path.dirname(output.fname_marker)
+        tmpdir = os.path.join(outdir, f'tmp.{wildcards.accession}')
+
+        shell(
+            'fasterq-dump --threads {threads} --outdir {outdir} --temp {tmpdir} {wildcards.accession} > {log.outfile} 2> {log.errfile}'
+        )
 
 
-rule get_fastq_pe:
-    output:
-        'data/PE/{accession}_1.fastq',
-        'data/PE/{accession}_2.fastq'
-    resources:
-        mem_mb = 5_000
-    threads: 6
-    wrapper:
-        '0.51.2/bio/sra-tools/fasterq-dump'
-
-
-rule vpipe_trim_se:
+rule vpipe_trim:
     input:
-        fname = 'data/SE/{accession}.fastq'
+        fname_marker = 'data/{accession}.marker'
     output:
-        'trimmed/SE/{accession}.fastq',
+        touch('trimmed/{accession}.marker')
     params:
         extra = '-ns_max_n 4 -min_qual_mean 30 -trim_qual_left 30 -trim_qual_right 30 -trim_qual_window 10',
         len_cutoff = len_cutoff
@@ -82,45 +78,34 @@ rule vpipe_trim_se:
         """
         echo "The length cutoff is: {params.len_cutoff}" > {log.outfile}
 
+        filecount=$(ls data/{wildcards.accession}*.fastq | wc -l)
+        case $filecount in
+            1)
+                # SE reads
+                echo "Read type: SE" > {log.outfile}
+                input_spec="-fastq data/{wildcards.accession}.fastq"
+                ;;
+            2)
+                # PE reads
+                echo "Read type: PE" > {log.outfile}
+                input_spec="-fastq data/{wildcards.accession}_1.fastq -fastq2 data/{wildcards.accession}_2.fastq"
+                ;;
+            *)
+                # oh no
+                exit 1
+                ;;
+        esac
+
         prinseq-lite.pl \
-            -fastq {input.fname} \
+            $input_spec \
             {params.extra} \
             -out_format 3 \
-            -out_good trimmed/SE/{wildcards.accession} \
+            -out_good trimmed/{wildcards.accession} \
             -out_bad null \
             -min_len {params.len_cutoff} \
             -log {log.outfile} 2> >(tee {log.errfile} >&2)
-        """
 
-
-rule vpipe_trim_pe:
-    input:
-        fname1 = 'data/PE/{accession}_1.fastq',
-        fname2 = 'data/PE/{accession}_2.fastq'
-    output:
-        'trimmed/PE/{accession}_1.fastq',
-        'trimmed/PE/{accession}_2.fastq'
-    params:
-        extra = '-ns_max_n 4 -min_qual_mean 30 -trim_qual_left 30 -trim_qual_right 30 -trim_qual_window 10',
-        len_cutoff = len_cutoff
-    log:
-        outfile = 'logs/prinseq.{accession}.out.log',
-        errfile = 'logs/prinseq.{accession}.err.log'
-    conda:
-        'envs/preprocessing.yaml'
-    shell:
-        """
-        echo "The length cutoff is: {params.len_cutoff}" > {log.outfile}
-
-        prinseq-lite.pl \
-            -fastq {input.fname1} \
-            -fastq2 {input.fname2} \
-            {params.extra} \
-            -out_format 3 \
-            -out_good trimmed/PE/{wildcards.accession} \
-            -out_bad null \
-            -min_len {params.len_cutoff} \
-            -log {log.outfile} 2> >(tee {log.errfile} >&2)
+        rm -f trimmed/{wildcards.accession}*_singletons.fastq
         """
 
 
@@ -143,12 +128,13 @@ rule bwa_index:
 
 rule bwa_mem:
     input:
-        reads = gather_trimmed_input_files,
+        fname_marker = 'trimmed/{accession}.marker',
         index = 'references/reference.amb'
     output:
-        'alignment/{accession}.bam'
+        fname_bam = 'alignment/{accession}.bam'
     log:
-        'logs/bwa_mem_{accession}.log'
+        outfile = 'logs/bwa_mem.{accession}.out.log',
+        errfile = 'logs/bwa_mem.{accession}.err.log'
     params:
         index = 'references/reference',
         sort = 'samtools',
@@ -156,8 +142,15 @@ rule bwa_mem:
     resources:
         mem_mb = 16_000
     threads: 8
-    wrapper:
-        '0.51.2/bio/bwa/mem'
+    shell:
+        """
+        (bwa mem \
+            -t {threads} \
+            {params.index} \
+            trimmed/{wildcards.accession}*.fastq \
+            | samtools sort -o {output.fname_bam}) \
+        > {log.outfile} 2> {log.errfile}
+        """
 
 
 rule samtools_index:
