@@ -45,8 +45,8 @@ rule download_fastq:
     output:
         fname_marker = touch('data/{accession}.marker')
     log:
-        outfile = 'logs/fasterq-dump.{accession}.out.log',
-        errfile = 'logs/fasterq-dump.{accession}.err.log'
+        outfile = 'logs/download.{accession}.out.log',
+        errfile = 'logs/download.{accession}.err.log'
     resources:
         mem_mb = 5_000
     threads: 6
@@ -70,14 +70,15 @@ rule vpipe_trim:
         extra = '-ns_max_n 4 -min_qual_mean 30 -trim_qual_left 30 -trim_qual_right 30 -trim_qual_window 10',
         len_cutoff = len_cutoff
     log:
-        outfile = 'logs/prinseq.{accession}.out.log',
-        errfile = 'logs/prinseq.{accession}.err.log'
+        outfile = 'logs/trimming.{accession}.out.log',
+        errfile = 'logs/trimming.{accession}.err.log'
     conda:
         'envs/preprocessing.yaml'
     shell:
         """
         echo "The length cutoff is: {params.len_cutoff}" > {log.outfile}
 
+        # detect SE/PE read type
         filecount=$(ls data/{wildcards.accession}*.fastq | wc -l)
         case $filecount in
             1)
@@ -96,6 +97,7 @@ rule vpipe_trim:
                 ;;
         esac
 
+        # do trimming
         prinseq-lite.pl \
             $input_spec \
             {params.extra} \
@@ -105,7 +107,16 @@ rule vpipe_trim:
             -min_len {params.len_cutoff} \
             -log {log.outfile} 2> >(tee {log.errfile} >&2)
 
+        # remove singletons
         rm -f trimmed/{wildcards.accession}*_singletons.fastq
+
+        # if no reads survive, create empty fastq file
+        # (such that mapping does not fail)
+        trimmedfilecount=$(shopt -s nullglob; files=(trimmed/{wildcards.accession}*.fastq); echo ${{#files[@]}})
+        if [ "$trimmedfilecount" -eq "0" ]; then
+            echo "No non-singletons survived trimming, creating empty FastQ file" > {log.outfile}
+            touch trimmed/{wildcards.accession}.fastq
+        fi
         """
 
 
@@ -133,8 +144,8 @@ rule bwa_mem:
     output:
         fname_bam = 'alignment/{accession}.bam'
     log:
-        outfile = 'logs/bwa_mem.{accession}.out.log',
-        errfile = 'logs/bwa_mem.{accession}.err.log'
+        outfile = 'logs/alignment.{accession}.out.log',
+        errfile = 'logs/alignment.{accession}.err.log'
     params:
         index = 'references/reference',
         sort = 'samtools',
