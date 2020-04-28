@@ -4,6 +4,9 @@ workdir: config['workdir']
 localrules: all, aggregate_results, plot_results, select_samples
 
 
+accession_list = config['samples_se'] + config['samples_pe']
+
+
 def len_cutoff(wildcards, trim_percent_cutoff=.8):
     """Compute minimal length based on average read length."""
     import glob
@@ -24,7 +27,8 @@ def len_cutoff(wildcards, trim_percent_cutoff=.8):
 rule all:
     input:
         'plots/',
-        'results/selected_samples.csv'
+        'results/selected_samples.csv',
+        'results/sra_metadata.csv'
 
 
 rule download_fastq:
@@ -192,7 +196,7 @@ rule aggregate_results:
     input:
         fname_list = expand(
             'coverage/coverage.{accession}.csv',
-            accession=config['samples_se'] + config['samples_pe'])
+            accession=accession_list)
     output:
         fname = 'results/coverage.csv',
         fname_stats = 'results/statistics.csv',
@@ -295,6 +299,36 @@ rule plot_results:
 
         plt.tight_layout()
         plt.savefig(dname / 'coverage.pdf')
+
+
+rule retrieve_sra_metadata:
+    output:
+        fname = 'results/sra_metadata.csv'
+    run:
+        import io
+        import subprocess
+
+        import pandas as pd
+        from tqdm import tqdm
+
+        tmp = []
+        for accession in tqdm(accession_list):
+            proc = subprocess.Popen(
+                ['esearch', '-db', 'sra', '-query', accession],
+                stdout=subprocess.PIPE)
+            proc_stdout = subprocess.check_output(
+                ['efetch', '-format', 'runinfo'],
+                stdin=proc.stdout)
+            proc.wait()
+
+            header, data, *rest = proc_stdout.decode('utf-8').split('\n')
+            cur = {k: v for k, v in zip(header.split(','), data.split(','))}
+
+            tmp.append(cur)
+
+        df = pd.DataFrame(tmp)
+        assert df.shape[0] == len(accession_list)
+        df.to_csv(output.fname, index=False)
 
 
 rule select_samples:
