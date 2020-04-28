@@ -1,7 +1,7 @@
 configfile: 'data_survey.config.yaml'
 workdir: config['workdir']
 
-localrules: all, aggregate_results, plot_results
+localrules: all, aggregate_results, plot_results, select_samples
 
 
 def len_cutoff(wildcards, trim_percent_cutoff=.8):
