@@ -40,7 +40,7 @@ rule download_fastq:
     resources:
         mem_mb = 5_000
     threads: 6
-    group: 'data_processing'
+    # group: 'data_processing'
     run:
         import os
 
@@ -63,7 +63,7 @@ rule vpipe_trim:
     log:
         outfile = 'logs/trimming.{accession}.out.log',
         errfile = 'logs/trimming.{accession}.err.log'
-    group: 'data_processing'
+    # group: 'data_processing'
     conda:
         'envs/preprocessing.yaml'
     shell:
@@ -145,7 +145,7 @@ rule bwa_mem:
     resources:
         mem_mb = 16_000
     threads: 8
-    group: 'data_processing'
+    # group: 'data_processing'
     shell:
         """
         (bwa mem \
@@ -162,7 +162,7 @@ rule samtools_index:
         'alignment/{accession}.bam'
     output:
         'alignment/{accession}.bam.bai'
-    group: 'data_processing'
+    # group: 'data_processing'
     wrapper:
         '0.51.2/bio/samtools/index'
 
@@ -173,7 +173,7 @@ rule compute_coverage:
         index = 'alignment/{accession}.bam.bai'
     output:
         fname = 'coverage/coverage.{accession}.csv'
-    group: 'data_processing'
+    # group: 'data_processing'
     run:
         import pysam
 
