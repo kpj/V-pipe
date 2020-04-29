@@ -9,4 +9,5 @@ snakemake \
   --profile lsf \
   -s data_survey.smk \
   --use-conda \
+  -pr \
   "$@"
