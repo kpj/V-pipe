@@ -83,6 +83,15 @@ rule vpipe_trim:
                 echo "Read type: PE" > {log.outfile}
                 input_spec="-fastq data/{wildcards.accession}_1.fastq -fastq2 data/{wildcards.accession}_2.fastq"
                 ;;
+            3)
+                # some runs have a variable number of reads per spot.
+                # why? how? we might never know.
+                # for now, let's pretend everything is a-okay.
+                echo "Read type: 'variable number of reads per spot'" > {log.outfile}
+                input_spec="-fastq data/{wildcards.accession}_1.fastq -fastq2 data/{wildcards.accession}_2.fastq"
+
+                rm data/{wildcards.accession}.fastq # there is nothing to see here, walk along
+                ;;
             *)
                 # oh no
                 exit 1
