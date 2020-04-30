@@ -49,6 +49,7 @@ rule download_fastq:
     # group: 'data_processing'
     run:
         import os
+        import glob
 
         outdir = os.path.dirname(output.fname_marker)
         tmpdir = os.path.join(outdir, f'tmp.{wildcards.accession}')
@@ -56,6 +57,14 @@ rule download_fastq:
         shell(
             'fasterq-dump --threads {threads} --outdir {outdir} --temp {tmpdir} {wildcards.accession} > {log.outfile} 2> {log.errfile}'
         )
+
+        # make sure the files were actually created
+        available_files = list(sorted(
+            glob.glob(f'data/{wildcards.accession}*.fastq')))
+        if len(available_files) not in (1, 2, 3):
+            raise RuntimeError(
+                'Unexpected number of FastQ files for ' +
+                f'{wildcards.accession}: {len(available_files)}')
 
 
 rule vpipe_trim:
