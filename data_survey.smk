@@ -83,26 +83,26 @@ rule vpipe_trim:
         'envs/preprocessing.yaml'
     shell:
         """
-        echo "The length cutoff is: {params.len_cutoff}" > {log.outfile}
+        echo "The length cutoff is: {params.len_cutoff}" >> {log.outfile}
 
         # detect SE/PE read type
         filecount=$(ls data/{wildcards.accession}*.fastq | wc -l)
         case $filecount in
             1)
                 # SE reads
-                echo "Read type: SE" > {log.outfile}
+                echo "Read type: SE" >> {log.outfile}
                 input_spec="-fastq data/{wildcards.accession}.fastq"
                 ;;
             2)
                 # PE reads
-                echo "Read type: PE" > {log.outfile}
+                echo "Read type: PE" >> {log.outfile}
                 input_spec="-fastq data/{wildcards.accession}_1.fastq -fastq2 data/{wildcards.accession}_2.fastq"
                 ;;
             3)
                 # some runs have a variable number of reads per spot.
                 # why? how? we might never know.
                 # for now, let's pretend everything is a-okay.
-                echo "Read type: 'variable number of reads per spot'" > {log.outfile}
+                echo "Read type: 'variable number of reads per spot'" >> {log.outfile}
                 input_spec="-fastq data/{wildcards.accession}_1.fastq -fastq2 data/{wildcards.accession}_2.fastq"
 
                 rm data/{wildcards.accession}.fastq # there is nothing to see here, walk along
@@ -130,7 +130,7 @@ rule vpipe_trim:
         # (such that mapping does not fail)
         trimmedfilecount=$(shopt -s nullglob; files=(trimmed/{wildcards.accession}*.fastq); echo ${{#files[@]}})
         if [ "$trimmedfilecount" -eq "0" ]; then
-            echo "No non-singletons survived trimming, creating empty FastQ file" > {log.outfile}
+            echo "No non-singletons survived trimming, creating empty FastQ file" >> {log.outfile}
             touch trimmed/{wildcards.accession}.fastq
         fi
         """
