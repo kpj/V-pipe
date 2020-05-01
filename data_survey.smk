@@ -40,6 +40,8 @@ rule all:
 rule download_fastq:
     output:
         fname_marker = touch('data/{accession}.marker')
+    params:
+        restart_times = 10
     log:
         outfile = 'logs/download.{accession}.out.log',
         errfile = 'logs/download.{accession}.err.log'
@@ -54,17 +56,24 @@ rule download_fastq:
         outdir = os.path.dirname(output.fname_marker)
         tmpdir = os.path.join(outdir, f'tmp.{wildcards.accession}')
 
-        shell(
-            'fasterq-dump --threads {threads} --outdir {outdir} --temp {tmpdir} {wildcards.accession} > {log.outfile} 2> {log.errfile}'
-        )
+        counter = 0
+        while True:
+            shell(
+                'fasterq-dump --threads {threads} --outdir {outdir} --temp {tmpdir} {wildcards.accession} > >(tee {log.outfile}) 2>&1'
+            )
 
-        # make sure the files were actually created
-        available_files = list(sorted(
-            glob.glob(f'data/{wildcards.accession}*.fastq')))
-        if len(available_files) not in (1, 2, 3):
-            raise RuntimeError(
-                'Unexpected number of FastQ files for ' +
-                f'{wildcards.accession}: {len(available_files)}')
+            # make sure the files were actually created
+            available_files = glob.glob(f'data/{wildcards.accession}*.fastq')
+            if len(available_files) in (1, 2, 3):
+                # downloaded SE, PE, varying read number per spot
+                break
+
+            # no files were downloaded, retry...
+            shell('echo "Download failed, restarting" >> {log.errfile}')
+            counter += 1
+
+            if counter > params.restart_times:
+                raise RuntimeError(f'Download failed {counter} times')
 
 
 rule vpipe_trim:
