@@ -87,6 +87,8 @@ rule vpipe_trim:
     log:
         outfile = 'logs/trimming.{accession}.out.log',
         errfile = 'logs/trimming.{accession}.err.log'
+    resources:
+        mem_mb = 10_000
     # group: 'data_processing'
     conda:
         'envs/preprocessing.yaml'
