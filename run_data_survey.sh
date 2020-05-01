@@ -2,7 +2,7 @@
 
 bsub \
   -N \
-  -R 'rusage[mem=2000]' \
+  -R 'rusage[mem=4000]' \
   -q normal.24h \
   -oo snake.out -eo snake.err \
 snakemake \
