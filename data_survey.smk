@@ -234,7 +234,7 @@ rule aggregate_results:
             accession=accession_list)
     output:
         fname = 'results/coverage.csv',
-        fname_stats = 'results/statistics.csv',
+        fname_stats = report('results/statistics.csv', caption='report/empty_caption.rst'),
         fname_lowquar = 'results/coverage_lowerquartile.csv',
         fname_median = 'results/coverage_median.csv',
         fname_upperquar = 'results/coverage_upperquartile.csv'
@@ -272,7 +272,7 @@ rule plot_results:
         fname_median = 'results/coverage_median.csv',
         fname_upperquar = 'results/coverage_upperquartile.csv'
     output:
-        dname = directory('plots/')
+        dname = report(directory('plots/'), patterns=['{name}.pdf'], caption='report/empty_caption.rst')
     run:
         from pathlib import Path
 
@@ -372,7 +372,7 @@ rule select_samples:
         fname_median = 'results/coverage_median.csv',
         fname_upperquar = 'results/coverage_upperquartile.csv'
     output:
-        fname = 'results/selected_samples.csv'
+        fname = report('results/selected_samples.csv', caption='report/empty_caption.rst')
     run:
         import pandas as pd
 
