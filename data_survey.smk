@@ -345,7 +345,7 @@ rule retrieve_sra_metadata:
         import pandas as pd
         from tqdm import tqdm
 
-        tmp = []
+        df_list = []
         for accession in tqdm(accession_list):
             proc = subprocess.Popen(
                 ['esearch', '-db', 'sra', '-query', accession],
@@ -355,12 +355,15 @@ rule retrieve_sra_metadata:
                 stdin=proc.stdout)
             proc.wait()
 
-            header, data, *rest = proc_stdout.decode('utf-8').split('\n')
-            cur = {k: v for k, v in zip(header.split(','), data.split(','))}
+            buf = io.StringIO(proc_stdout.decode('utf-8'))
+            df_cur = pd.read_csv(buf)
 
-            tmp.append(cur)
+            df_sel = df_cur[df_cur['Run'] == accession]
+            assert df_sel.shape[0] == 1
 
-        df = pd.DataFrame(tmp)
+            df_list.append(df_sel)
+
+        df = pd.concat(df_list)
         assert df.shape[0] == len(accession_list)
         df.to_csv(output.fname, index=False)
 
