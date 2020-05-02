@@ -33,8 +33,7 @@ def len_cutoff(wildcards, trim_percent_cutoff=.8):
 rule all:
     input:
         'plots/',
-        'results/selected_samples.csv',
-        'results/sra_metadata.csv'
+        'results/selected_samples.csv'
 
 
 rule download_fastq:
@@ -366,33 +365,56 @@ rule retrieve_sra_metadata:
         df.to_csv(output.fname, index=False)
 
 
-rule select_samples:
+rule assemble_final_dataframe:
     input:
         fname_lowquar = 'results/coverage_lowerquartile.csv',
         fname_median = 'results/coverage_median.csv',
-        fname_upperquar = 'results/coverage_upperquartile.csv'
+        fname_upperquar = 'results/coverage_upperquartile.csv',
+        fname_meta = 'results/sra_metadata.csv'
+    output:
+        fname = report('results/final_dataframe.csv')
+    run:
+        import pandas as pd
+
+        # read data
+        df_lq = pd.read_csv(input.fname_lowquar, index_col='variable')
+        df_mq = pd.read_csv(input.fname_median, index_col='variable')
+        df_uq = pd.read_csv(input.fname_upperquar, index_col='variable')
+
+        df_meta = pd.read_csv(input.fname_meta, index_col='Run')
+
+        assert set(df_lq.index) == set(df_mq.index) == set(df_uq.index) == set(df_meta.index)
+
+        # merge data
+        df_merge = pd.concat([
+            df_lq.rename(columns={'value': 'per_base_read_count_lower_quartile'}),
+            df_mq.rename(columns={'value': 'per_base_read_count_median'}),
+            df_uq.rename(columns={'value': 'per_base_read_count_upper_quartile'}),
+            df_meta
+        ], axis=1)
+
+        df_merge.to_csv(output.fname)
+
+
+rule select_samples:
+    input:
+        fname = 'results/final_dataframe.csv'
     output:
         fname = report('results/selected_samples.csv', caption='report/empty_caption.rst')
     run:
         import pandas as pd
 
         # read data
-        df_lq = pd.read_csv(input.fname_lowquar, index_col=0)
-        df_mq = pd.read_csv(input.fname_median, index_col=0)
-        df_uq = pd.read_csv(input.fname_upperquar, index_col=0)
+        df = pd.read_csv(input.fname, index_col=0)
 
         # apply thresholds
-        selection_mq = set(df_mq[
-            df_mq['value'] >= config['thresholds']['median_minium']
-        ].index)
-        selection_lq = set(df_lq[
-            df_lq['value'] >= config['thresholds']['quartile_range'][0]
-        ].index)
-        selection_uq = set(df_uq[
-            df_uq['value'] <= config['thresholds']['quartile_range'][1]
-        ].index)
+        df_sub = df[
+            (df['per_base_read_count_median'] >= config['thresholds']['median_minium']) &
+            (df['per_base_read_count_lower_quartile'] >= config['thresholds']['quartile_range'][0]) &
+            (df['per_base_read_count_upper_quartile'] <= config['thresholds']['quartile_range'][1])
+        ]
 
-        selection = selection_mq & selection_lq & selection_uq
+        selection = df_sub.index.tolist()
 
         # save results
         with open(output.fname, 'w') as fd:
