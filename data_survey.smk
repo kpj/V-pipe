@@ -20,8 +20,8 @@ def len_cutoff(wildcards, trim_percent_cutoff=.8):
         raise RuntimeError(
             'Unexpected number of FastQ files for ' +
             f'{wildcards.accession}: {len(available_files)}')
-    fname = available_files[0]
 
+    fname = available_files[0]
     read_len = np.mean(
         [len(r.seq) for r in SeqIO.parse(fname, 'fastq')]
     ).astype(int)
@@ -368,11 +368,51 @@ rule retrieve_sra_metadata:
         df.to_csv(output.fname, index=False)
 
 
+rule compute_additional_properties:
+    input:
+        marker_list = expand(
+            'trimmed/{accession}.marker',
+            accession=accession_list)
+    output:
+        fname = 'results/extra_properties.csv'
+    resources:
+        mem_mb = 10_000
+    run:
+        import os
+        import glob
+
+        import numpy as np
+        import pandas as pd
+
+        from Bio import SeqIO
+
+        tmp = []
+        for marker_fname in input.marker_list:
+            accession = os.path.splitext(os.path.basename(marker_fname))[0]
+
+            fname_glob = marker_fname.replace('.marker', '*.fastq')
+            available_files = glob.glob(fname_glob)
+
+            fname = available_files[0]
+            read_len = np.mean(
+                [len(r.seq) for r in SeqIO.parse(fname, 'fastq')]
+            ).astype(int)
+
+            tmp.append({
+                'accession': accession,
+                'avg_read_length': read_len
+            })
+
+        pd.DataFrame(tmp).to_csv(output.fname, index=False)
+
+
+
 rule assemble_final_dataframe:
     input:
         fname_lowquar = 'results/coverage_lowerquartile.csv',
         fname_median = 'results/coverage_median.csv',
         fname_upperquar = 'results/coverage_upperquartile.csv',
+        fname_extra = 'results/extra_properties.csv',
         fname_meta = 'results/sra_metadata.csv'
     output:
         fname = report('results/final_dataframe.csv')
@@ -384,15 +424,17 @@ rule assemble_final_dataframe:
         df_mq = pd.read_csv(input.fname_median, index_col='variable')
         df_uq = pd.read_csv(input.fname_upperquar, index_col='variable')
 
+        df_extra = pd.read_csv(input.fname_extra, index_col='accession')
         df_meta = pd.read_csv(input.fname_meta, index_col='Run')
 
-        assert set(df_lq.index) == set(df_mq.index) == set(df_uq.index) == set(df_meta.index)
+        assert sorted(df_lq.index) == sorted(df_mq.index) == sorted(df_uq.index) == sorted(df_extra.index) == sorted(df_meta.index)
 
         # merge data
         df_merge = pd.concat([
             df_lq.rename(columns={'value': 'per_base_read_count_lower_quartile'}),
             df_mq.rename(columns={'value': 'per_base_read_count_median'}),
             df_uq.rename(columns={'value': 'per_base_read_count_upper_quartile'}),
+            df_extra,
             df_meta
         ], axis=1)
 
