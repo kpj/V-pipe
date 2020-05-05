@@ -385,9 +385,10 @@ rule compute_additional_properties:
         import pandas as pd
 
         from Bio import SeqIO
+        from tqdm import tqdm
 
         tmp = []
-        for marker_fname in input.marker_list:
+        for marker_fname in tqdm(input.marker_list):
             accession = os.path.splitext(os.path.basename(marker_fname))[0]
 
             fname_glob = marker_fname.replace('.marker', '*.fastq')
