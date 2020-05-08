@@ -1,5 +1,4 @@
 import os
-import glob
 from pathlib import Path
 
 import pandas as pd
@@ -18,7 +17,7 @@ def main(root_dir):
     dummy_date = '19700101'
 
     for accession in tqdm(accession_list):
-        available_files = glob.glob(str(root_dir / f'data/{accession}*.fastq'))
+        available_files = list(root_dir.glob(f'data/{accession}*.fastq'))
 
         if len(available_files) == 1:
             # SE
@@ -38,7 +37,7 @@ def main(root_dir):
         target.mkdir(parents=True, exist_ok=True)
 
         for path in available_files:
-            basename = os.path.basename(path)
+            basename = path.name
 
             if len(available_files) == 3:
                 # if there is a varying number of reads per spot,
