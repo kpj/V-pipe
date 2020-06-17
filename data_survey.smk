@@ -4,7 +4,7 @@ workdir: config['workdir']
 localrules: all, aggregate_results, plot_results, select_samples
 
 
-accession_list = config['samples_se'] + config['samples_pe']
+accession_list = config['sample_accessions']
 
 
 def len_cutoff(wildcards, trim_percent_cutoff=.8):
@@ -405,7 +405,6 @@ rule compute_additional_properties:
             })
 
         pd.DataFrame(tmp).to_csv(output.fname, index=False)
-
 
 
 rule assemble_final_dataframe:
