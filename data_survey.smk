@@ -51,15 +51,21 @@ rule download_fastq:
     run:
         import os
         import glob
+        import time
+        import subprocess
 
         outdir = os.path.dirname(output.fname_marker)
         tmpdir = os.path.join(outdir, f'tmp.{wildcards.accession}')
 
         counter = 0
         while True:
-            shell(
-                'fasterq-dump --threads {threads} --outdir {outdir} --temp {tmpdir} {wildcards.accession} > >(tee {log.outfile}) 2>&1'
-            )
+            try:
+                shell(
+                    'fasterq-dump --threads {threads} --outdir {outdir} --temp {tmpdir} {wildcards.accession} > >(tee {log.outfile}) 2>&1'
+                )
+            except subprocess.CalledProcessError:
+                print('Download process crashed, hopefully this is just a fluke...')
+                time.sleep(100)
 
             # make sure the files were actually created
             available_files = glob.glob(f'data/{wildcards.accession}*.fastq')
