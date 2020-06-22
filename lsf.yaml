@@ -1,0 +1,2 @@
+compute_additional_properties:
+    - "-W 23:00"

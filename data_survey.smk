@@ -1,7 +1,7 @@
 configfile: 'data_survey.config.yaml'
 workdir: config['workdir']
 
-localrules: all, aggregate_results, plot_results, select_samples
+localrules: all
 
 
 accession_list = config['sample_accessions']
@@ -237,6 +237,8 @@ rule aggregate_results:
         fname_lowquar = 'results/coverage_lowerquartile.csv',
         fname_median = 'results/coverage_median.csv',
         fname_upperquar = 'results/coverage_upperquartile.csv'
+    resources:
+        mem_mb = 20_000
     run:
         import pandas as pd
 
@@ -272,6 +274,8 @@ rule plot_results:
         fname_upperquar = 'results/coverage_upperquartile.csv'
     output:
         dname = report(directory('plots/'), patterns=['{name}.pdf'], caption='report/empty_caption.rst')
+    resources:
+        mem_mb = 5_000
     run:
         from pathlib import Path
 
