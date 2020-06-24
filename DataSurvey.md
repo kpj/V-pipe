@@ -3,8 +3,8 @@
 ## Usage
 
 ```bash
-$ snakemake -s data_survey.smk -pr --cores 2 --use-conda
+$ ./run_data_survey.sh
 $ python prepare_vpipe_input.py
-$ snakemake -s vpipe.snake -pr --cores 2 --use-conda
+$ ./run_vpipe.sh
 $ python gather_vcf_files.py
 ```
