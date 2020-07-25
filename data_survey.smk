@@ -320,7 +320,7 @@ rule plot_coverage_per_locus:
             label='upper quartile')
 
         plt.xlabel('Genomic position [bp]')
-        plt.ylabel('Per base read count for all samples')
+        plt.ylabel('Per base read count')
         # plt.yscale('log')
 
         plt.legend(loc='best')
