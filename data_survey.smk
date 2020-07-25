@@ -32,7 +32,8 @@ def len_cutoff(wildcards, trim_percent_cutoff=.8):
 
 rule all:
     input:
-        'plots/',
+        'plots/coverage_per_locus.pdf',
+        'plots/coverage_per_sample.pdf',
         'results/selected_samples.csv'
 
 
@@ -273,13 +274,68 @@ rule aggregate_results:
                     .to_csv(output.fname_upperquar))
 
 
-rule plot_results:
+rule plot_coverage_per_locus:
+    input:
+        fname = 'results/coverage.csv'
+    output:
+        fname = report('plots/coverage_per_locus.pdf', caption='report/empty_caption.rst')
+    resources:
+        mem_mb = 5_000
+    run:
+        import pandas as pd
+
+        import seaborn as sns
+        import matplotlib.pyplot as plt
+
+        # fix big boom on macOS
+        import matplotlib
+        matplotlib.use('Agg')
+
+        # read data
+        df = pd.read_csv(input.fname)
+
+        # compute data statistics
+        df_stats = pd.DataFrame({
+            'lower quartile': df.quantile(q=.25, axis=1),
+            'median': df.quantile(q=.5, axis=1),
+            'upper quartile': df.quantile(q=.75, axis=1)
+        })
+
+        # plot data
+        plt.figure(figsize=(8, 6))
+
+        plt.plot(
+            df_stats.index,
+            df_stats['median'],
+            label='median')
+        plt.plot(
+            df_stats.index,
+            df_stats['lower quartile'],
+            alpha=.5,
+            label='lower quartile')
+        plt.plot(
+            df_stats.index,
+            df_stats['upper quartile'],
+            alpha=.5,
+            label='upper quartile')
+
+        plt.xlabel('Genomic position [bp]')
+        plt.ylabel('Per base read count for all samples')
+        # plt.yscale('log')
+
+        plt.legend(loc='best')
+
+        plt.tight_layout()
+        plt.savefig(output.fname)
+
+
+rule plot_coverage_per_sample:
     input:
         fname_lowquar = 'results/coverage_lowerquartile.csv',
         fname_median = 'results/coverage_median.csv',
         fname_upperquar = 'results/coverage_upperquartile.csv'
     output:
-        dname = report(directory('plots/'), patterns=['{name}.pdf'], caption='report/empty_caption.rst')
+        fname = report('plots/coverage_per_sample.pdf', caption='report/empty_caption.rst')
     resources:
         mem_mb = 5_000
     run:
@@ -295,8 +351,6 @@ rule plot_results:
         matplotlib.use('Agg')
 
         # read data
-        dname = Path(output.dname)
-
         df_lq = pd.read_csv(input.fname_lowquar, index_col=0)
         df_mq = pd.read_csv(input.fname_median, index_col=0)
         df_uq = pd.read_csv(input.fname_upperquar, index_col=0)
@@ -342,7 +396,7 @@ rule plot_results:
         plt.legend(loc='best')
 
         plt.tight_layout()
-        plt.savefig(dname / 'coverage.pdf')
+        plt.savefig(output.fname)
 
 
 rule retrieve_sra_metadata:
