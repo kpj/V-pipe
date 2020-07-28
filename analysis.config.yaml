@@ -1,0 +1,5 @@
+workdir: analysis_run
+
+input:
+    vcf_directory: vcf_PE
+    covariates: pipeline_run/results/final_dataframe.csv
