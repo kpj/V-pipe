@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+
+exec -a "$0" snakemake -s "./vpipe.snake" --use-conda "$@"
